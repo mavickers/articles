@@ -43,11 +43,135 @@ We will need to embed the view files so that they may be found inside the .dll o
 ```
 <EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml" />
 ```
-3. 
+3. Edit the EmbeddedResource tag and add a LogicalName tag so that the code looks like this:
+```
+    <EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml">
+      <LogicalName>MyProject.Common.Mvc.Views.SiteAlerts.DefaultView.cshtml</LogicalName>
+    </EmbeddedResource>
+```
+4. Repeat for each view in the module.
+5. Save the project file, close it, and reopen it.
 
+Step 3 in this sequence instructs the compiler to make the embedded view available in a different namespace than Visual Studio's default scheme. The scheme we are replacing it with is a scheme that Sitefinity uses to find embedded views in a .dll.
+
+Unfortunately as of Visual Studio 2017 there isn't a way to change the logical name of an embedded file through the Properties interface.
+
+### VirtualPathProviderViewEngine
+
+We will be providing a VirtualPathProviderViewEngine which will be invoked on Sitefinity startup. The engine itself will be in it's own class file while configuration for the engine will be provided via a class file that stores application constants.
+
+The class file for the engine is as follows.
+
+```
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Web.Mvc;
+
+namespace MyProject.Common.Startup
+{
+    public class VirtualPathProviderViewEngine : System.Web.Mvc.VirtualPathProviderViewEngine
+    {
+        private readonly string[] _rootModuleNamespaces;
+
+        private VirtualPathProviderViewEngine(string[] rootModuleNamespaces)
+        {
+            _rootModuleNamespaces = rootModuleNamespaces;
+        }
+
+        public static VirtualPathProviderViewEngine Create(string[] rootModuleNamespaces, string[] locationFormats)
+        {
+            var engine = new VirtualPathProviderViewEngine(rootModuleNamespaces);
+
+            // find all the namespaces created by the /Application/Modules folder structure
+            // and pluck the top-level names out to create new search locations for views;
+            // we do not want to search the actual folder structure via system.io because we do 
+            // not want to deploy that folder.
+
+            var moduleTypes = Assembly.GetExecutingAssembly().GetTypes().Where(engine.IsAssemblyMatchRootNamespace).Select(t => t.Namespace).Distinct();
+            var classNames = moduleTypes.Select(t => t.Split('.')[3]).ToList();
+            var additionalLocations = new List<string>();
+
+            classNames.ForEach(t => additionalLocations.AddRange(locationFormats.Where(f => f.Contains("{1}")).Select(format => format.Replace("{1}", t))));
+
+            var allLocationFormats = locationFormats.Concat(additionalLocations).ToArray();
+
+            engine.FileExtensions = new[] { "cshtml", "vbhtml", "aspx", "ascx" };
+            engine.AreaViewLocationFormats = allLocationFormats;
+            engine.AreaMasterLocationFormats = allLocationFormats;
+            engine.AreaPartialViewLocationFormats = allLocationFormats;
+            engine.ViewLocationFormats = allLocationFormats;
+            engine.MasterLocationFormats = allLocationFormats;
+            engine.PartialViewLocationFormats = allLocationFormats;
+
+            return engine;
+        }
+
+        protected override IView CreatePartialView(ControllerContext controllerContext, string partialPath)
+        {
+            if (partialPath.EndsWith(".cshtml") || partialPath.EndsWith(".vbhtml"))
+            {
+                return new RazorView(controllerContext, partialPath, null, false, null);
+            }
+
+            return new WebFormView(controllerContext, partialPath);
+        }
+
+        protected override IView CreateView(ControllerContext controllerContext, string viewPath, string masterPath)
+        {
+            if (viewPath.EndsWith(".cshtml") || viewPath.EndsWith(".vbhtml"))
+            {
+                return new RazorView(controllerContext, viewPath, masterPath, false, null);
+            }
+
+            return new WebFormView(controllerContext, viewPath, masterPath);
+        }
+
+        private bool IsAssemblyMatchRootNamespace(System.Type assemblyType)
+        {
+            return _rootModuleNamespaces.Any(ns => (assemblyType.Namespace?.StartsWith(ns) ?? false) && assemblyType.Namespace != ns);
+        }
+    }
+}
+```
 
 ### VirtualPathProvider 
 Sitefinity needs to know how to get to the views for your components considering a) the views are going to be located in an external project and b) the views will not be located in the standard folder format that Sitefinity expects.
 
-In the common project we have a "Constants" file that contains constant values that may be used by the common project and by the other Sitefinity projects. In it we will define virtual paths that Sitefinity may use to help find views that are d
+In the common project we will have a "Constants" file that contains constant values that may be used by the common project and by the other Sitefinity projects. In it we will define virtual paths that Sitefinity may use to help find views that are embedded in the compiled project.
 
+The stub of the constants file may look as follows.
+
+```
+using MyProject.Common.Startup
+
+namespace MyProject.Common
+{
+    public class Constants
+    {
+        private struct VirtualPathsParameters
+        {
+            public static string[] LocationFormats => new[]
+            {
+                "~/Frontend-Assembly/MyProject.Common/Modules/{1}/{0}.cshtml",
+                "~/Frontend-Assembly/MyProject.Common/Modules/{1}/Views/{0}.cshtml",
+                "~/Frontend-Assembly/MyProject.Common/MVC/{1}/{0}.cshtml",
+                "~/Frontend-Assembly/MyProject.Common/MVC/Views/{1}/{0}.cshtml",
+                "~/Frontend-Assembly/MyProject.Common/Modules/Views/{0}.cshtml",
+            };
+            
+            public static string[] RootModuleNamespaces => new[]
+            {
+                "MyProject.Common.Modules",
+            };
+        }        
+        
+        public static VirtualPathProviderViewEngine VirtualPageProviderViewEngine => VirtualPathProviderViewEngine.Create(VirtualPathsParameters.RootModuleNamespaces, VirtualPathsParameters.LocationFormats);
+
+    }
+}
+```
+
+Note that this will provide Sitefinity locations to look for views within the common project. If you want to use this same technique for embedding views in the Sitefinity project itself, repeat the inclusion of the VirtualPathsParameters struct and the VirtualPageProviderViewEngine static property in the Sitefinity project constants file, changing namespaces as necessary.
+
+### 
