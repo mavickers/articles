@@ -6,3 +6,8 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
+/21LPS000-Articles.iml
+/csv-plugin.xml
+/encodings.xml
+/modules.xml
+/vcs.xml
