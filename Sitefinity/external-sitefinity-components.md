@@ -198,17 +198,20 @@ protected override void OnApplicationStarted()
 
 Then in your SitefinityApplicationStart class file you should have a Bootstrapper_Bootstrapped method that looks somewhat like the following:
 ```
-Log.Write($"Bootstrapper_Bootstrapped Start {DateTime.Now}");
-
-// pass the NinjectKernel to the Common library.
-Common.Sitefinity.Constants.NinjectKernel = Constants.NinjectKernel;
-
-GlobalConfiguration.Configure(WebApiRouteConfiguration.Configure);
-Config.RegisterSection<AllCustomSettings>();
-UnityDependencyRegistrations.Register(ObjectFactory.Container);
-SearchEngineStart.Warmup(Constants.Config.SearchIndexStartupList);
-
-Log.Write($"Bootstrapper_Bootstrapped End {DateTime.Now}");
+internal static void Bootstrapper_Bootstrapped(object sender, EventArgs eventArgs)
+{
+    Log.Write($"Bootstrapper_Bootstrapped Start {DateTime.Now}");
+    
+    // pass the NinjectKernel to the Common library.
+    Common.Sitefinity.Constants.NinjectKernel = Constants.NinjectKernel;
+    
+    GlobalConfiguration.Configure(WebApiRouteConfiguration.Configure);
+    Config.RegisterSection<AllCustomSettings>();
+    UnityDependencyRegistrations.Register(ObjectFactory.Container);
+    SearchEngineStart.Warmup(Constants.Config.SearchIndexStartupList);
+    
+    Log.Write($"Bootstrapper_Bootstrapped End {DateTime.Now}");
+}
 ```
 
 We want to add a couple lines in this method that will invoke the VirtualPath providers we have created:
