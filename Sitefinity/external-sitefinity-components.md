@@ -45,9 +45,9 @@ We will need to embed the view files so that they may be found inside the .dll o
 ```
 3. Edit the EmbeddedResource tag and add a LogicalName tag so that the code looks like this:
 ```
-    <EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml">
-      <LogicalName>MyProject.Common.Mvc.Views.SiteAlerts.DefaultView.cshtml</LogicalName>
-    </EmbeddedResource>
+<EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml">
+  <LogicalName>MyProject.Common.Mvc.Views.SiteAlerts.DefaultView.cshtml</LogicalName>
+</EmbeddedResource>
 ```
 4. Repeat for each view in the module.
 5. Save the project file, close it, and reopen it.
@@ -174,4 +174,61 @@ namespace MyProject.Common
 
 Note that this will provide Sitefinity locations to look for views within the common project. If you want to use this same technique for embedding views in the Sitefinity project itself, repeat the inclusion of the VirtualPathsParameters struct and the VirtualPageProviderViewEngine static property in the Sitefinity project constants file, changing namespaces as necessary.
 
-### 
+### Sitefinity Startup
+Now that the groundwork is laid for Sitefinity to find the embedded views we need to actually consume these classes.
+
+In the Sitefinity project Global.asax.cs you may already have code that invokes a Sitefinity startup classes where you have a set of instructions for Sitefinity to run prior to making the app available. For instance, you may have something that looks like this:
+```
+protected override void OnApplicationStarted()
+{
+    base.OnApplicationStarted();
+
+    Bootstrapper.Bootstrapped += SitefinityApplicationStart.Bootstrapper_Bootstrapped;
+    Bootstrapper.Initialized += SitefinityApplicationStart.Bootstrapper_Initialized;
+    Bootstrapper.Initializing += SitefinityApplicationStart.Bootstrapper_Initializing;
+
+    AreaRegistration.RegisterAllAreas();
+    GlobalFilters.Filters.Add(new HandleErrorAttribute());
+}
+```
+
+Then in your SitefinityApplicationStart class file you should have a Bootstrapper_Bootstrapped method that looks somewhat like the following:
+```
+Log.Write($"Bootstrapper_Bootstrapped Start {DateTime.Now}");
+
+// pass the NinjectKernel to the Common library.
+Common.Sitefinity.Constants.NinjectKernel = Constants.NinjectKernel;
+
+GlobalConfiguration.Configure(WebApiRouteConfiguration.Configure);
+Config.RegisterSection<AllCustomSettings>();
+UnityDependencyRegistrations.Register(ObjectFactory.Container);
+SearchEngineStart.Warmup(Constants.Config.SearchIndexStartupList);
+
+Log.Write($"Bootstrapper_Bootstrapped End {DateTime.Now}");
+```
+
+We want to add a couple lines in this method that will invoke the VirtualPath providers we have created:
+
+```
+ViewEngines.Engines.Add(MyProject.Common.Constants.VirtualPageProviderViewEngine);
+ViewEngines.Engines.Add(MyProject.Sitefinity.Constants.VirtualPageProviderViewEngine);
+```
+
+If you have no written one for the Sitefinity project you can omit the second line.
+
+Sitefinity now knows where to look for the embedded views that are compiled into the common project.
+
+### Toolboxes Configuration
+
+Sitefinity now needs to be told that the widget is available in the page editor. This can be done by adding a line to the ToolboxConfig.config file in a section where you wish for it to appear:
+```
+<add type="Telerik.Sitefinity.Mvc.Proxy.MvcControllerProxy" controllerType="MyProject.Common.Modules.SiteAlerts.SiteAlertsController" title="Site Alerts" cssClass="sfContentBlockIcn sfMvcIcn" ControllerName="MyProject.Common.Modules.SiteAlerts.SiteAlertsController" name="SiteAlerts" />
+```
+
+### Front-end Assets
+
+Front-end assets (css, javascript, images) can be handled via its own build processes in the common project. The general idea is to use css/javascript that provides widgets with base styling and functionality. 
+
+For instance, if you're creating a widget in the common project to use Bootstrap modules within Sitefinity then you would include the base css/javascript from Bootstrap and compile it into a dist folder in the common project. This dist folder would be included as part of the files that get checked into the common project.
+
+Then in the Sitefinity project your front-end build process would import the output of the common project dist folder and doing any rebasings/renamings as necessary before combining/compiling with the front-end assets of the Sitefinity project.
