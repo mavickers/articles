@@ -7,7 +7,7 @@ The organization of files as described in this document do not strictly adhere t
 At present this does not interfere with the operation of Sitefinity but may be subject to breaking in future versions.
 
 #### Content Types and the Module Builder
-This document is strictly concerned with reusing widgets and front-end components. Widgets that rely on custom content types will require those content types to be exported from the module builder and imported via the module building into your new Sitefinity site.
+This document is strictly concerned with reusing widgets and front-end components. Widgets that rely on custom content types will require those content types to be exported from the module builder and imported via the module builder into your new Sitefinity site.
 
 That may present its own set of challenges with respect to content type updates, versioning and deployment.
 
@@ -38,21 +38,22 @@ Let's also assume that the namespace for your common project and your Sitefinity
 ### Embedding the Views
 We will need to embed the view files so that they may be found inside the .dll of the compiled common project. This will require the following steps.
 
-1. Right click on each view, select Properties and change the Build Action to _Embedded Resource_. Save the project.
-2. Right click on the project and select Unload Project. Once the project is unloaded, right click on it again and select Edit. Search for the first view file in the project, "Modules\SiteAlerts\Views\DefaultView.cshtml". You should find an xml entry that looks like this:
+1. Right click on each view, select Properties and change the Build Action to _Embedded Resource_. 
+2. Make sure the "Copy to Output Directory" option is set to _Do not copy_. Save the project.
+3. Right click on the project and select Unload Project. Once the project is unloaded, right click on it again and select Edit. Search for the first view file in the project, "Modules\SiteAlerts\Views\DefaultView.cshtml". You should find an xml entry that looks like this:
 ```
 <EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml" />
 ```
-3. Edit the EmbeddedResource tag and add a LogicalName tag so that the code looks like this:
+4. Edit the EmbeddedResource tag and add a LogicalName tag so that the code looks like this:
 ```
 <EmbeddedResource Include="Modules\SiteAlerts\Views\DefaultView.cshtml">
   <LogicalName>MyProject.Common.Mvc.Views.SiteAlerts.DefaultView.cshtml</LogicalName>
 </EmbeddedResource>
 ```
-4. Repeat for each view in the module.
-5. Save the project file, close it, and reopen it.
+5. Repeat for each view in the module, including views for widget designers.
+6. Save the project file, close it, and reopen it.
 
-Step 3 in this sequence instructs the compiler to make the embedded view available in a different namespace than Visual Studio's default scheme. The scheme we are replacing it with is a scheme that Sitefinity uses to find embedded views in a .dll.
+Step 4 in this sequence instructs the compiler to make the embedded view available in a different namespace than Visual Studio's default scheme. The scheme we are replacing it with is a scheme that Sitefinity uses to find embedded views in a .dll.
 
 Unfortunately as of Visual Studio 2017 there isn't a way to change the logical name of an embedded file through the Properties interface.
 
@@ -138,7 +139,7 @@ namespace MyProject.Common.Startup
 ### VirtualPathProvider 
 Sitefinity needs to know how to get to the views for your components considering a) the views are going to be located in an external project and b) the views will not be located in the standard folder format that Sitefinity expects.
 
-In the common project we will have a "Constants" file that contains constant values that may be used by the common project and by the other Sitefinity projects. In it we will define virtual paths that Sitefinity may use to help find views that are embedded in the compiled project.
+In the common project we will have a "Constants" file that contains constant values that may be used by the common project and by the other Sitefinity projects. In it we will define virtual paths that Sitefinity may use to help find views that are embedded in the compiled common project, and we will expose the paths using the custom VirtualPathProviderViewEngine we created in the prior section.
 
 The stub of the constants file may look as follows.
 
@@ -162,24 +163,25 @@ namespace MyProject.Common
             
             public static string[] RootModuleNamespaces => new[]
             {
-                "MyProject.Common.Modules",
+                "MyProject.Common.Modules"
             };
         }        
         
         public static VirtualPathProviderViewEngine VirtualPageProviderViewEngine => VirtualPathProviderViewEngine.Create(VirtualPathsParameters.RootModuleNamespaces, VirtualPathsParameters.LocationFormats);
-
     }
 }
 ```
 
 Note that this will provide Sitefinity locations to look for views within the common project. If you want to use this same technique for embedding views in the Sitefinity project itself, repeat the inclusion of the VirtualPathsParameters struct and the VirtualPageProviderViewEngine static property in the Sitefinity project constants file, changing namespaces as necessary.
 
+A use-case for doing this with widgets specific to your Sitefinity project would be to keep the same module folder structure as the common project.
+
 ### Sitefinity Startup
 Now that the groundwork is laid for Sitefinity to find the embedded views we need to actually consume these classes.
 
-First, add a reference to the common project inside the Sitefinity project by finding the References folder in the Sitefinity project, right-clicking on the folder and select Add References.
+First, add a reference to the common project inside the Sitefinity project by finding the References folder in the Sitefinity project, right-clicking on the folder and selecting Add References.
 
-In the Sitefinity project Global.asax.cs you may already have code that invokes a Sitefinity startup classes where you have a set of instructions for Sitefinity to run prior to making the app available. For instance, you may have something that looks like this:
+In the Sitefinity project Global.asax.cs you may already have code invoking Sitefinity startup classes where you have a set of instructions for Sitefinity to run prior to making the app available. For instance, you may have something that looks like this:
 ```
 protected override void OnApplicationStarted()
 {
@@ -216,7 +218,7 @@ ViewEngines.Engines.Add(MyProject.Common.Constants.VirtualPageProviderViewEngine
 ViewEngines.Engines.Add(MyProject.Sitefinity.Constants.VirtualPageProviderViewEngine);
 ```
 
-If you have no written one for the Sitefinity project you can omit the second line.
+If you have not written a VirtualPathProviderViewEngine for the Sitefinity project itself you can omit the second line.
 
 Sitefinity now knows where to look for the embedded views that are compiled into the common project.
 
@@ -229,8 +231,8 @@ Sitefinity now needs to be told that the widget is available in the page editor.
 
 ### Front-end Assets
 
-Front-end assets (css, javascript, images) can be handled via its own build processes in the common project. The general idea is to use css/javascript that provides widgets with base styling and functionality. 
+Front-end assets (css, javascript, images) can be handled via its own build processes in the common project. The general idea is to use css/javascript that provides widgets with base styling and functionality. The base styling/functionality can then be written with code in your Sitefinity project.
 
-For instance, if you're creating a widget in the common project to use Bootstrap modules within Sitefinity then you would include the base css/javascript from Bootstrap and compile it into a dist folder in the common project. This dist folder would be included as part of the files that get checked into the common project.
+For instance, if you're creating a widget in the common project to use a Bootstrap module within Sitefinity then you would include the base css/javascript from Bootstrap and compile it into a dist folder in the common project. This dist folder would be included as part of the files that get checked into the common project.
 
-Then in the Sitefinity project your front-end build process would import the output of the common project dist folder and doing any rebasings/renamings as necessary before combining/compiling with the front-end assets of the Sitefinity project.
+Then in the Sitefinity project your front-end build process would import the output of the common project dist folder and perform any rebasings/renamings as necessary before combining/compiling with the front-end assets of the Sitefinity project.
