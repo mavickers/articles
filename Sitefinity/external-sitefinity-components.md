@@ -177,6 +177,8 @@ Note that this will provide Sitefinity locations to look for views within the co
 ### Sitefinity Startup
 Now that the groundwork is laid for Sitefinity to find the embedded views we need to actually consume these classes.
 
+First, add a reference to the common project inside the Sitefinity project by finding the References folder in the Sitefinity project, right-clicking on the folder and select Add References.
+
 In the Sitefinity project Global.asax.cs you may already have code that invokes a Sitefinity startup classes where you have a set of instructions for Sitefinity to run prior to making the app available. For instance, you may have something that looks like this:
 ```
 protected override void OnApplicationStarted()
