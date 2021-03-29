@@ -1,3 +1,5 @@
+## Creating and Consuming Sitefinity Components in a Separate Visual Studio Project
+
 ### Overview
 This document provides a brief explanation on how to create Sitefinity widgets in a secondary Visual Studio project so that they may be consumed in multiple Sitefinity web projects. Using this approach will allow a developer to reuse widgets by including a reference to a common Sitefinity widgets project and importing precompiled front-end widgets by way of front-end build tools such as grunt or gulp.
 
